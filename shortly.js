@@ -1,8 +1,8 @@
 var express = require('express');
+var session = require('express-session')
 var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
-
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -21,27 +21,36 @@ app.use(bodyParser.json());
 // Parse forms (signup/login)
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
+app.use(session({secret: 'keyboard cat'}));
 
 
-app.get('/', 
-function(req, res) {
-  res.render('index');
+
+app.get('/', function(req, res) {
+  if (util.checkToken(req, res)) {
+    res.render('index');
+  } else {
+    res.writeHead(303, {location: "/login"});
+    res.end();
+  }
 });
 
-app.get('/create', 
+app.get('/create',
 function(req, res) {
-  res.render('index');
+  if (util.checkToken(req, res)) {
+    res.render('index');
+  } else {
+    res.writeHead(303, {location: "/login"});
+    res.end();
+  }
 });
 
-app.get('/links', 
-function(req, res) {
+app.get('/links', function(req, res) {
   Links.reset().fetch().then(function(links) {
     res.send(200, links.models);
   });
 });
 
-app.post('/links', 
-function(req, res) {
+app.post('/links', function(req, res) {
   var uri = req.body.url;
 
   if (!util.isValidUrl(uri)) {
@@ -77,7 +86,74 @@ function(req, res) {
 /************************************************************/
 // Write your authentication routes here
 /************************************************************/
+app.get('/logout', function(req, res) {
+  req.session.token = undefined;
+  res.render("login");
+});
 
+app.get('/login', function(req, res) {
+  res.render('login');
+});
+
+app.post('/login', function(req, res) {
+  var username = req.body.username;
+  var password = req.body.password;
+
+  new User({ username: username }).fetch().then(function(fetchedUser) {
+    if (fetchedUser) {
+
+      var testUser = new User({username: username, password: password});
+      testUser.doHashPassword(fetchedUser.get('salt'));
+
+      if (fetchedUser.get('password') == testUser.get('password')) {
+        req.session.token = username;
+        res.writeHead(303, {location: "/"});
+        res.end();
+
+      } else {
+        res.render('loginError');
+      }
+
+      // res.writeHead(303, {location: "/login"});
+      // res.end();
+
+    } else {
+      res.writeHead(303, {location: "/signup"});
+      res.end();
+    }
+  });
+});
+
+
+app.get('/signup',
+function(req, res) {
+  res.render('signup');
+});
+
+
+app.post('/signup', function(req, res) {
+  var username = req.body.username;
+  var password = req.body.password;
+
+  new User({ username: username }).fetch().then(function(found) {
+    if (found) {
+      res.writeHead(303, {location: "/login"});
+      res.end();
+    } else {
+
+      var user = new User({
+        username: username,
+        password: password,
+      });
+
+      user.save().then(function(user) {
+        // Users.add(user);
+        res.writeHead(303, {location: "/"});
+        res.end();
+      });
+    }
+  });
+});
 
 
 /************************************************************/
