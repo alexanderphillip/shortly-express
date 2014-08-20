@@ -58,4 +58,16 @@ db.knex.schema.hasTable('users').then(function(exists) {
   }
 });
 
+db.knex.schema.hasTable('fbUsers').then(function(exists) {
+  if (!exists) {
+    db.knex.schema.createTable('fbUsers', function (user) {
+      user.increments('id').primary();
+      user.string('fbId', 255);
+      user.timestamps();
+    }).then(function (table) {
+      console.log('Created Table', table);
+    });
+  }
+});
+
 module.exports = db;

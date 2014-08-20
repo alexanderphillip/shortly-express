@@ -3,6 +3,7 @@ var session = require('express-session')
 var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
+var passport = require('passport')
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -10,6 +11,8 @@ var User = require('./app/models/user');
 var Links = require('./app/collections/links');
 var Link = require('./app/models/link');
 var Click = require('./app/models/click');
+var fbauth = require("./app/fbauth.js");
+
 
 var app = express();
 
@@ -22,10 +25,12 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
 app.use(session({secret: 'keyboard cat'}));
-
+app.use(passport.initialize());
+app.use(passport.session());
 
 
 app.get('/', function(req, res) {
+  console.log("GET /");
   if (util.checkToken(req, res)) {
     res.render('index');
   } else {
@@ -36,6 +41,7 @@ app.get('/', function(req, res) {
 
 app.get('/create',
 function(req, res) {
+  console.log("GET /create");
   if (util.checkToken(req, res)) {
     res.render('index');
   } else {
@@ -45,9 +51,14 @@ function(req, res) {
 });
 
 app.get('/links', function(req, res) {
-  Links.reset().fetch().then(function(links) {
-    res.send(200, links.models);
-  });
+  if (util.checkToken(req, res)) {
+    Links.reset().fetch().then(function(links) {
+      res.send(200, links.models);
+    });
+  } else {
+    res.writeHead(303, {location: "/login"});
+    res.end();
+  }
 });
 
 app.post('/links', function(req, res) {
@@ -87,11 +98,13 @@ app.post('/links', function(req, res) {
 // Write your authentication routes here
 /************************************************************/
 app.get('/logout', function(req, res) {
-  req.session.token = undefined;
+  req.session.token = undefined
+  req.logout();
   res.render("login");
 });
 
 app.get('/login', function(req, res) {
+  console.log("GET /login");
   res.render('login');
 });
 
@@ -118,7 +131,8 @@ app.post('/login', function(req, res) {
       // res.end();
 
     } else {
-      res.writeHead(303, {location: "/signup"});
+      //res.writeHead(303, {location: "/signup"});
+      res.writeHead(303, {location: "/login"});
       res.end();
     }
   });
@@ -127,6 +141,7 @@ app.post('/login', function(req, res) {
 
 app.get('/signup',
 function(req, res) {
+  console.log("GET /signup");
   res.render('signup');
 });
 
@@ -154,6 +169,12 @@ app.post('/signup', function(req, res) {
     }
   });
 });
+
+app.get('/auth/facebook', passport.authenticate('facebook'));
+
+app.get('/auth/facebook/callback',
+  passport.authenticate('facebook', { successRedirect: '/',
+                                      failureRedirect: '/login' }));
 
 
 /************************************************************/
